@@ -1,4 +1,4 @@
-# my-roblox-game 🎮
+# Squishy Rain 🌧️
 
 Our Roblox game. All the code lives in this repo, and we use [Rojo](https://rojo.space) to sync it into Roblox Studio. That way we can all work on it together without sending place files around.
 
@@ -64,9 +64,24 @@ File names decide the script type:
 - `Something.client.luau` is a LocalScript
 - `Something.luau` is a ModuleScript
 
-**Examples already in here:**
-- `src/server/Lava.server.luau`: a red block that kills you 🔥
-- `src/server/GrassField.server.luau`: a grass field 🌱
+**How the game is put together:**
+
+| Want to... | Edit this |
+|---|---|
+| Add or change a squishy (name, rarity, catch value, passive) | `src/shared/SquishyTypes.luau` |
+| Change what a squishy looks like | `src/server/SquishyShapes.luau` |
+| Add a weather type or mutation | `src/shared/Weather.luau` and `Mutations` in `SquishyTypes.luau` |
+| Change shop upgrades, Lucky Spin prizes, or their odds | `src/shared/Shop.luau` |
+| Add a chaotic event (like Lava Rain) | Copy `src/server/Events/LavaRain.luau` |
+| Change spawn rate, weather timing | Numbers at the top of `SquishyRain.server.luau` / `Weather.server.luau` |
+
+### Using real 3D models for squishies 🧈
+Any squishy can use a real model instead of the built-in shape:
+1. In Studio, get the model (Toolbox, or import from Blender) and put it in Workspace
+2. **Delete any scripts inside it** (free models sometimes hide sketchy scripts)
+3. Rename the model to **exactly** the squishy's name, like `Butter` or `Boba Tea`
+4. Right-click it → **Save to File...** → save it into `src/shared/Models/` as `Butter.rbxm`
+5. Delete it from Workspace. Rojo syncs the file in and the game uses it automatically. Commit the `.rbxm` so everyone gets it
 
 ---
 
