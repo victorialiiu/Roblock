@@ -72,7 +72,11 @@ File names decide the script type:
 | Change what a squishy looks like | `src/server/SquishyShapes.luau` |
 | Add a weather type or mutation | `src/shared/Weather.luau` and `Mutations` in `SquishyTypes.luau` |
 | Change shop upgrades, Lucky Spin prizes, or their odds | `src/shared/Shop.luau` |
-| Add a chaotic event (like Lava Rain) | Copy `src/server/Events/LavaRain.luau` |
+| Change the lobby booths | `src/server/Lobby.server.luau` |
+| Change player bases and showcase pedestals | `src/server/Base.server.luau` |
+| Change how trading works | `src/server/Trade.server.luau` |
+| Add the fart sound (or other sounds) | `src/shared/Sounds.luau` |
+| Add a chaotic event | Make a ModuleScript in `src/server/Events/` with a `Name`, `Start`, and `Stop` |
 | Change spawn rate, weather timing | Numbers at the top of `SquishyRain.server.luau` / `Weather.server.luau` |
 
 ### Using real 3D models for squishies 🧈
@@ -90,7 +94,7 @@ Any squishy can use a real model instead of the built-in shape:
 **Anything you build by hand in Studio (dragging parts around, etc.) is NOT saved to git.** The `.rbxlx` file is gitignored, so only the stuff in `src/` and `default.project.json` gets shared.
 
 So if you want teammates to see something:
-- **Make it with a script**, like the lava and grass field do, **or**
+- **Make it with a script**, like the squishy rain does, **or**
 - **Add it to `default.project.json`** under `Workspace`, like the Baseplate
 
 If you build something in Studio that you love, ask in the chat. We can turn it into a script or save it as a model file.

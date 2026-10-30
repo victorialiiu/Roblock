@@ -2,6 +2,7 @@
 local Shop = {}
 
 Shop.SPIN_COST = 100
+Shop.ROLL_COST = 100
 Shop.SPIN_TIME = 3
 Shop.COST_GROWTH = 1.7
 

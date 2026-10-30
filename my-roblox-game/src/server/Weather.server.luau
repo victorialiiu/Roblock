@@ -7,7 +7,7 @@ local SquishyTypes = require(ReplicatedStorage.Shared.SquishyTypes)
 
 local CALM_TIME = 60
 local WEATHER_TIME = 45
--- Chance of an event (like Lava Rain) instead of weather
+-- Chance of an event instead of weather, if there are any events
 local EVENT_CHANCE = 0.2
 
 local status = Instance.new("StringValue")
@@ -18,9 +18,10 @@ local currentEvent = Instance.new("StringValue")
 currentEvent.Name = "CurrentEvent"
 currentEvent.Parent = ReplicatedStorage
 
--- Every ModuleScript in src/server/Events is a possible event
+-- Every ModuleScript in src/server/Events (if that folder exists) is a possible event
 local events = {}
-for _, module in script.Parent.Events:GetChildren() do
+local eventsFolder = script.Parent:FindFirstChild("Events")
+for _, module in if eventsFolder then eventsFolder:GetChildren() else {} do
 	table.insert(events, require(module))
 end
 

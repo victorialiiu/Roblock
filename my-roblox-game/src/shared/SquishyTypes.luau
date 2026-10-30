@@ -65,8 +65,8 @@ local function weightOf(rarity, luck)
 	return rarity.Weight
 end
 
-local function pickRarity(luck)
-	if math.random() < SquishyTypes.EVIL_CHANCE then
+local function pickRarity(luck, allowEvil)
+	if allowEvil and math.random() < SquishyTypes.EVIL_CHANCE then
 		return "Evil"
 	end
 
@@ -85,8 +85,9 @@ local function pickRarity(luck)
 	return "Common"
 end
 
-function SquishyTypes.pickRandom(luck)
-	local rarity = pickRarity(luck or 1)
+-- Rolls in the lobby pass allowEvil = false
+function SquishyTypes.pickRandom(luck, allowEvil)
+	local rarity = pickRarity(luck or 1, allowEvil ~= false)
 	local choices = {}
 	for _, squishy in SquishyTypes.List do
 		if squishy.Rarity == rarity then
@@ -112,7 +113,42 @@ function SquishyTypes.colorFor(squishy, mutationName)
 	return squishy.Color
 end
 
--- Money for catching one, before boosts
+-- Turns "Golden Butter" back into the Butter squishy and "Golden"
+function SquishyTypes.parseItem(itemName)
+	for mutationName in SquishyTypes.Mutations do
+		local prefix = mutationName .. " "
+		if string.sub(itemName, 1, #prefix) == prefix then
+			return SquishyTypes.ByName[string.sub(itemName, #prefix + 1)], mutationName
+		end
+	end
+	return SquishyTypes.ByName[itemName], nil
+end
+
+-- Chance that a falling squishy is this one, with no luck boosts
+function SquishyTypes.chanceOf(squishy)
+	local sameRarity = 0
+	for _, other in SquishyTypes.List do
+		if other.Rarity == squishy.Rarity then
+			sameRarity += 1
+		end
+	end
+	if squishy.Rarity == "Evil" then
+		return SquishyTypes.EVIL_CHANCE / sameRarity
+	end
+
+	local total = 0
+	for _, rarity in SquishyTypes.Rarities do
+		total += rarity.Weight
+	end
+	return (1 - SquishyTypes.EVIL_CHANCE) * SquishyTypes.Rarities[squishy.Rarity].Weight / total / sameRarity
+end
+
+-- 0.02 -> "1 in 50"
+function SquishyTypes.formatChance(chance)
+	return "1 in " .. math.max(1, math.floor(1 / chance + 0.5))
+end
+
+-- Money for selling one, before boosts
 function SquishyTypes.valueOf(squishy, mutationName)
 	local mutation = SquishyTypes.Mutations[mutationName]
 	return squishy.Value * (if mutation then mutation.Multiplier else 1)

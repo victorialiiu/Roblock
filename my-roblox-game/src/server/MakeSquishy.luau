@@ -3,8 +3,9 @@ local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local SquishyTypes = require(ReplicatedStorage.Shared.SquishyTypes)
-local Shop = require(ReplicatedStorage.Shared.Shop)
+local Lobby = require(ReplicatedStorage.Shared.Lobby)
 local SquishyShapes = require(script.Parent.SquishyShapes)
+local InventoryService = require(script.Parent.InventoryService)
 
 local LIFETIME = 20
 local STEAL_PERCENT = 0.1
@@ -160,40 +161,43 @@ local function applyMutation(parts, mutation)
 	end
 end
 
+-- Name, rarity, drop rate, and value floating over its head
 local function addNameTag(body, squishy, mutationName, rarity)
 	local mutation = SquishyTypes.Mutations[mutationName]
 
 	local tag = Instance.new("BillboardGui")
-	tag.Size = UDim2.fromOffset(170, 44)
-	tag.StudsOffset = Vector3.new(0, body.Size.Y / 2 + 1.5, 0)
+	tag.Size = UDim2.fromOffset(170, 62)
+	tag.StudsOffset = Vector3.new(0, body.Size.Y / 2 + 2, 0)
 	tag.MaxDistance = 60
 	tag.Parent = body
 
-	local name = Instance.new("TextLabel")
-	name.Size = UDim2.new(1, 0, 0.55, 0)
-	name.BackgroundTransparency = 1
-	name.Font = Enum.Font.FredokaOne
-	name.TextScaled = true
-	name.TextColor3 = if mutation then mutation.Color else WHITE
-	name.TextStrokeTransparency = 0.3
-	name.Text = SquishyTypes.itemName(squishy.Name, mutationName)
-	name.Parent = tag
+	local function addLine(text, color, top, height)
+		local label = Instance.new("TextLabel")
+		label.Position = UDim2.fromScale(0, top)
+		label.Size = UDim2.fromScale(1, height)
+		label.BackgroundTransparency = 1
+		label.Font = Enum.Font.FredokaOne
+		label.TextScaled = true
+		label.TextColor3 = color
+		label.TextStrokeTransparency = 0.3
+		label.Text = text
+		label.Parent = tag
+	end
 
-	local info = name:Clone()
-	info.Position = UDim2.new(0, 0, 0.55, 0)
-	info.Size = UDim2.new(1, 0, 0.45, 0)
-	info.TextColor3 = rarity.Color
-	info.Text = if squishy.Value
-		then squishy.Rarity .. " • $" .. SquishyTypes.valueOf(squishy, mutationName)
-		else "EVIL • RUN!"
-	info.Parent = tag
+	addLine(SquishyTypes.itemName(squishy.Name, mutationName), if mutation then mutation.Color else WHITE, 0, 0.4)
+	addLine(squishy.Rarity .. " • " .. SquishyTypes.formatChance(SquishyTypes.chanceOf(squishy)), rarity.Color, 0.4, 0.3)
+	if squishy.Value then
+		addLine("Worth $" .. SquishyTypes.valueOf(squishy, mutationName), Color3.fromRGB(140, 255, 150), 0.7, 0.3)
+	else
+		addLine("Steals your money! RUN!", Color3.fromRGB(255, 80, 80), 0.7, 0.3)
+	end
 end
 
 local function nearestRoot(position)
 	local nearest, nearestDistance = nil, CHASE_RANGE
 	for _, player in Players:GetPlayers() do
 		local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-		if root then
+		if root and not Lobby.contains(root.Position) then
 			local distance = (root.Position - position).Magnitude
 			if distance < nearestDistance then
 				nearest, nearestDistance = root, distance
@@ -204,26 +208,11 @@ local function nearestRoot(position)
 end
 
 local function collect(player, squishy, mutationName)
-	local inventory = player:FindFirstChild("Inventory")
 	local leaderstats = player:FindFirstChild("leaderstats")
-	if not inventory or not leaderstats then
-		return
+	if leaderstats then
+		InventoryService.add(player, squishy.Name, mutationName)
+		leaderstats.Squishies.Value += 1
 	end
-
-	local key = SquishyTypes.itemName(squishy.Name, mutationName)
-	local count = inventory:FindFirstChild(key)
-	if count then
-		count.Value += 1
-	else
-		count = Instance.new("IntValue")
-		count.Name = key
-		count.Value = 1
-		count:SetAttribute("Squishy", squishy.Name)
-		count:SetAttribute("Mutation", mutationName)
-		count.Parent = inventory
-	end
-	leaderstats.Squishies.Value += 1
-	leaderstats.Money.Value += SquishyTypes.valueOf(squishy, mutationName) * Shop.moneyMultiplier(player)
 end
 
 local function hurt(player, humanoid, squishy)
@@ -262,12 +251,11 @@ local function pop(body, color)
 	body:Destroy()
 end
 
-local function makeSquishy(squishy, position, mutationName)
+-- Builds the squishy's look with no gameplay. Used for falling squishies and base showcases
+local function build(squishy, mutationName, size, cframe)
 	local rarity = SquishyTypes.Rarities[squishy.Rarity]
 	local mutation = SquishyTypes.Mutations[mutationName]
-	local size = rarity.Size * math.random(90, 110) / 100
 	local evil = squishy.Rarity == "Evil"
-	local cframe = CFrame.new(position) * CFrame.Angles(0, math.random() * math.pi * 2, 0)
 
 	local models = ReplicatedStorage.Shared:FindFirstChild("Models")
 	local model = models and models:FindFirstChild(squishy.Name)
@@ -278,8 +266,6 @@ local function makeSquishy(squishy, position, mutationName)
 		body, tintable = buildFromShape(squishy, size, cframe)
 	end
 	body.Name = "Squishy"
-	-- Light and bouncy
-	body.CustomPhysicalProperties = PhysicalProperties.new(0.3, 0.5, 0.8)
 
 	if mutation then
 		applyMutation(tintable, mutation)
@@ -297,6 +283,20 @@ local function makeSquishy(squishy, position, mutationName)
 		light.Range = 12
 		light.Parent = body
 	end
+
+	return body, tintable
+end
+
+local function makeSquishy(squishy, position, mutationName)
+	local rarity = SquishyTypes.Rarities[squishy.Rarity]
+	local mutation = SquishyTypes.Mutations[mutationName]
+	local size = rarity.Size * math.random(90, 110) / 100
+	local evil = squishy.Rarity == "Evil"
+	local cframe = CFrame.new(position) * CFrame.Angles(0, math.random() * math.pi * 2, 0)
+
+	local body, tintable = build(squishy, mutationName, size, cframe)
+	-- Light and bouncy
+	body.CustomPhysicalProperties = PhysicalProperties.new(0.3, 0.5, 0.8)
 
 	-- Keep it upright instead of tumbling around
 	local attachment = Instance.new("Attachment")
@@ -361,4 +361,7 @@ local function makeSquishy(squishy, position, mutationName)
 	end
 end
 
-return makeSquishy
+return {
+	spawn = makeSquishy,
+	build = build,
+}

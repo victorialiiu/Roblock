@@ -4,9 +4,10 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SquishyTypes = require(ReplicatedStorage.Shared.SquishyTypes)
 local Weather = require(ReplicatedStorage.Shared.Weather)
 local Shop = require(ReplicatedStorage.Shared.Shop)
-local makeSquishy = require(script.Parent.MakeSquishy)
+local Lobby = require(ReplicatedStorage.Shared.Lobby)
+local makeSquishy = require(script.Parent.MakeSquishy).spawn
 
-local SPAWN_DELAY = 0.25
+local SPAWN_DELAY = 0.4
 local SPAWN_RADIUS = 60
 
 local currentEvent = ReplicatedStorage:WaitForChild("CurrentEvent")
@@ -30,13 +31,16 @@ while true do
 		local player = players[math.random(#players)]
 		local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 		if root then
-			local offset = Vector3.new(
-				math.random(-SPAWN_RADIUS, SPAWN_RADIUS),
-				70,
-				math.random(-SPAWN_RADIUS, SPAWN_RADIUS)
-			)
-			local squishy = SquishyTypes.pickRandom(Shop.getLuck(player))
-			makeSquishy(squishy, root.Position + offset, pickMutation(squishy, player))
+			-- Try a few spots so nothing lands in the lobby
+			for _ = 1, 5 do
+				local position = root.Position
+					+ Vector3.new(math.random(-SPAWN_RADIUS, SPAWN_RADIUS), 70, math.random(-SPAWN_RADIUS, SPAWN_RADIUS))
+				if not Lobby.contains(position) then
+					local squishy = SquishyTypes.pickRandom(Shop.getLuck(player))
+					makeSquishy(squishy, position, pickMutation(squishy, player))
+					break
+				end
+			end
 		end
 	end
 	task.wait(SPAWN_DELAY)
