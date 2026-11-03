@@ -1,11 +1,16 @@
 local Players = game:GetService("Players")
+local CollectionService = game:GetService("CollectionService")
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local SquishyTypes = require(ReplicatedStorage.Shared.SquishyTypes)
-local Lobby = require(ReplicatedStorage.Shared.Lobby)
+local World = require(ReplicatedStorage.Shared.World)
+local Passes = require(ReplicatedStorage.Shared.Passes)
+local Format = require(ReplicatedStorage.Shared.Format)
 local SquishyShapes = require(script.Parent.SquishyShapes)
 local InventoryService = require(script.Parent.InventoryService)
+local notify = require(script.Parent.Notify)
+local SquishyPassService = require(script.Parent.SquishyPassService)
 
 local LIFETIME = 20
 local STEAL_PERCENT = 0.1
@@ -150,23 +155,26 @@ local function buildFromModel(model, size, cframe)
 	return body, parts
 end
 
-local function applyMutation(parts, mutation)
+-- The strongest attribute picks the color and material, so stacked ones still look clean
+local function applyMutations(parts, mutations)
+	local main = SquishyTypes.mainMutation(mutations)
+	if not main then
+		return
+	end
 	for _, part in parts do
-		if mutation.Tint then
-			part.Color = part.Color:Lerp(mutation.Tint, 0.6)
+		if main.Tint then
+			part.Color = part.Color:Lerp(main.Tint, 0.6)
 		end
-		if mutation.Material then
-			part.Material = mutation.Material
+		if main.Material then
+			part.Material = main.Material
 		end
 	end
 end
 
 -- Name, rarity, drop rate, and value floating over its head
-local function addNameTag(body, squishy, mutationName, rarity)
-	local mutation = SquishyTypes.Mutations[mutationName]
-
+local function addNameTag(body, squishy, mutations, rarity, region)
 	local tag = Instance.new("BillboardGui")
-	tag.Size = UDim2.fromOffset(170, 62)
+	tag.Size = UDim2.fromOffset(190, 62)
 	tag.StudsOffset = Vector3.new(0, body.Size.Y / 2 + 2, 0)
 	tag.MaxDistance = 60
 	tag.Parent = body
@@ -184,10 +192,11 @@ local function addNameTag(body, squishy, mutationName, rarity)
 		label.Parent = tag
 	end
 
-	addLine(SquishyTypes.itemName(squishy.Name, mutationName), if mutation then mutation.Color else WHITE, 0, 0.4)
-	addLine(squishy.Rarity .. " • " .. SquishyTypes.formatChance(SquishyTypes.chanceOf(squishy)), rarity.Color, 0.4, 0.3)
+	local nameColor = if #mutations > 0 then SquishyTypes.highlightFor(squishy, mutations) else WHITE
+	addLine(SquishyTypes.itemName(squishy.Name, mutations), nameColor, 0, 0.4)
+	addLine(squishy.Rarity .. " • " .. SquishyTypes.formatChance(SquishyTypes.chanceOf(squishy, region)), rarity.Color, 0.4, 0.3)
 	if squishy.Value then
-		addLine("Worth $" .. SquishyTypes.valueOf(squishy, mutationName), Color3.fromRGB(140, 255, 150), 0.7, 0.3)
+		addLine("Worth " .. Format.money(SquishyTypes.valueOf(squishy, mutations)), Color3.fromRGB(140, 255, 150), 0.7, 0.3)
 	else
 		addLine("Steals your money! RUN!", Color3.fromRGB(255, 80, 80), 0.7, 0.3)
 	end
@@ -197,7 +206,8 @@ local function nearestRoot(position)
 	local nearest, nearestDistance = nil, CHASE_RANGE
 	for _, player in Players:GetPlayers() do
 		local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-		if root and not Lobby.contains(root.Position) then
+		-- Only chase people out hunting, not anyone on the spawn pad
+		if root and World.contains(root.Position) and not World.inSpawn(root.Position) then
 			local distance = (root.Position - position).Magnitude
 			if distance < nearestDistance then
 				nearest, nearestDistance = root, distance
@@ -207,12 +217,40 @@ local function nearestRoot(position)
 	return nearest
 end
 
-local function collect(player, squishy, mutationName)
+local function sellNow(player, squishy, mutations, amount)
+	local earned = InventoryService.priceOf(player, squishy, mutations, amount)
+	InventoryService.giveMoney(player, earned)
+	notify(player, "💸 Auto sold " .. SquishyTypes.itemName(squishy.Name, mutations) .. " for " .. Format.money(earned))
+end
+
+-- Returns false if they couldn't pick it up (bag full)
+local function collect(player, squishy, mutations)
 	local leaderstats = player:FindFirstChild("leaderstats")
-	if leaderstats then
-		InventoryService.add(player, squishy.Name, mutationName)
-		leaderstats.Squishies.Value += 1
+	if not leaderstats then
+		return false
 	end
+
+	local amount = if Passes.owns(player, "Pet") and math.random() < Passes.PET_DOUBLE_CHANCE then 2 else 1
+	local autoSell = Passes.owns(player, "AutoSell")
+	local basic = SquishyTypes.Rarities[squishy.Rarity].Order <= 2 and #mutations == 0
+
+	if autoSell and basic then
+		sellNow(player, squishy, mutations, amount)
+	elseif InventoryService.isFull(player) then
+		if not autoSell then
+			notify(player, "🎒 Your bag is full! Sell some squishies, or rebirth for more room")
+			return false
+		end
+		sellNow(player, squishy, mutations, amount)
+	else
+		InventoryService.add(player, squishy.Name, mutations, amount)
+		if amount > 1 then
+			notify(player, "🐣 Your buddy caught a second one!")
+		end
+	end
+	leaderstats.Squishies.Value += amount
+	SquishyPassService.addCatchXp(player, squishy, mutations, amount)
+	return true
 end
 
 local function hurt(player, humanoid, squishy)
@@ -251,10 +289,11 @@ local function pop(body, color)
 	body:Destroy()
 end
 
--- Builds the squishy's look with no gameplay. Used for falling squishies and base showcases
-local function build(squishy, mutationName, size, cframe)
+-- Builds the squishy's look with no gameplay. Used for falling squishies, base showcases, and pets.
+-- mutations is a list like { "Wet", "Shocked" }. region changes the drop rate on the name tag
+local function build(squishy, mutations, size, cframe, region)
 	local rarity = SquishyTypes.Rarities[squishy.Rarity]
-	local mutation = SquishyTypes.Mutations[mutationName]
+	mutations = mutations or {}
 	local evil = squishy.Rarity == "Evil"
 
 	local models = ReplicatedStorage.Shared:FindFirstChild("Models")
@@ -267,15 +306,21 @@ local function build(squishy, mutationName, size, cframe)
 	end
 	body.Name = "Squishy"
 
-	if mutation then
-		applyMutation(tintable, mutation)
-	end
-	addNameTag(body, squishy, mutationName, rarity)
+	applyMutations(tintable, mutations)
+	addNameTag(body, squishy, mutations, rarity, region)
 
-	if rarity.Order >= 3 or mutation then
+	-- One sparkle effect per attribute, so stacked squishies look extra fancy
+	if rarity.Order >= 3 and #mutations == 0 then
 		local sparkles = Instance.new("Sparkles")
-		sparkles.SparkleColor = if mutation then mutation.Color else rarity.Color
+		sparkles.SparkleColor = rarity.Color
 		sparkles.Parent = body
+	end
+	for i, name in mutations do
+		if i <= 3 then
+			local sparkles = Instance.new("Sparkles")
+			sparkles.SparkleColor = SquishyTypes.Mutations[name].Color
+			sparkles.Parent = body
+		end
 	end
 	if rarity.Order >= 4 or evil then
 		local light = Instance.new("PointLight")
@@ -287,14 +332,14 @@ local function build(squishy, mutationName, size, cframe)
 	return body, tintable
 end
 
-local function makeSquishy(squishy, position, mutationName)
+local function makeSquishy(squishy, position, mutations, region)
 	local rarity = SquishyTypes.Rarities[squishy.Rarity]
-	local mutation = SquishyTypes.Mutations[mutationName]
+	mutations = mutations or {}
 	local size = rarity.Size * math.random(90, 110) / 100
 	local evil = squishy.Rarity == "Evil"
 	local cframe = CFrame.new(position) * CFrame.Angles(0, math.random() * math.pi * 2, 0)
 
-	local body, tintable = build(squishy, mutationName, size, cframe)
+	local body, tintable = build(squishy, mutations, size, cframe, region)
 	-- Light and bouncy
 	body.CustomPhysicalProperties = PhysicalProperties.new(0.3, 0.5, 0.8)
 
@@ -315,20 +360,23 @@ local function makeSquishy(squishy, position, mutationName)
 		if done or not player or not humanoid or humanoid.Health <= 0 then
 			return
 		end
-		done = true
-
 		if evil then
 			hurt(player, humanoid, squishy)
-		else
-			collect(player, squishy, mutationName)
+		elseif not collect(player, squishy, mutations) then
+			return
 		end
-		pop(body, if mutation then mutation.Color else squishy.Color)
+		done = true
+		pop(body, if #mutations > 0 then SquishyTypes.highlightFor(squishy, mutations) else squishy.Color)
 	end)
 
+	-- The magnet gamepass looks for these
+	if not evil then
+		CollectionService:AddTag(body, "FallingSquishy")
+	end
 	body.Parent = workspace
 	Debris:AddItem(body, LIFETIME)
 
-	if mutation and mutation.Rainbow then
+	if SquishyTypes.hasRainbow(mutations) then
 		task.spawn(function()
 			local hue = 0
 			while body.Parent and not done do

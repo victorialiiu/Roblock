@@ -25,25 +25,32 @@ sky.CanTouch = false
 sky.CanQuery = false
 sky.Parent = workspace
 
-local emitter = Instance.new("ParticleEmitter")
-emitter.EmissionDirection = Enum.NormalId.Bottom
-emitter.Rate = 0
-emitter.LightEmission = 0.5
-emitter.Parent = sky
+-- One emitter per weather, since two can happen at once
+local emitters = {}
+for i = 1, 2 do
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.EmissionDirection = Enum.NormalId.Bottom
+	emitter.Rate = 0
+	emitter.LightEmission = 0.5
+	emitter.Parent = sky
+	emitters[i] = emitter
+end
 
-local function update(name)
-	local weather = Weather.ByName[name]
-	if not weather then
-		emitter.Rate = 0
-		return
+local function update(value)
+	local weathers = Weather.parse(value)
+	for i, emitter in emitters do
+		local weather = weathers[i]
+		if weather then
+			local particles = weather.Particles
+			emitter.Color = if particles.Rainbow then RAINBOW else ColorSequence.new(particles.Color)
+			emitter.Speed = NumberRange.new(particles.Speed)
+			emitter.Lifetime = NumberRange.new(60 / particles.Speed + 0.5)
+			emitter.Size = NumberSequence.new(particles.Size)
+			emitter.Rate = particles.Rate / #weathers
+		else
+			emitter.Rate = 0
+		end
 	end
-
-	local particles = weather.Particles
-	emitter.Color = if particles.Rainbow then RAINBOW else ColorSequence.new(particles.Color)
-	emitter.Speed = NumberRange.new(particles.Speed)
-	emitter.Lifetime = NumberRange.new(60 / particles.Speed + 0.5)
-	emitter.Size = NumberSequence.new(particles.Size)
-	emitter.Rate = particles.Rate
 end
 
 update(currentEvent.Value)

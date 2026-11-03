@@ -68,16 +68,36 @@ File names decide the script type:
 
 | Want to... | Edit this |
 |---|---|
-| Add or change a squishy (name, rarity, catch value, passive) | `src/shared/SquishyTypes.luau` |
+| Add or change a squishy (name, rarity, value, equip boost) | `src/shared/SquishyTypes.luau` |
 | Change what a squishy looks like | `src/server/SquishyShapes.luau` |
-| Add a weather type or mutation | `src/shared/Weather.luau` and `Mutations` in `SquishyTypes.luau` |
-| Change shop upgrades, Lucky Spin prizes, or their odds | `src/shared/Shop.luau` |
+| Add a weather type or attribute (mutation) | `src/shared/Weather.luau` and `Mutations` in `SquishyTypes.luau` |
+| Add or change a region (its squishies, luck, attribute, terrain, unlock cost) | One file per region in `src/shared/Regions/` |
+| Move the lobby island or the hunting map | `src/shared/Lobby.luau` / `src/shared/World.luau` |
+| Change the portals between them | `src/server/Travel.server.luau` |
+| Change the region walls and gates | `src/server/RegionGates.server.luau` |
+| Change how the land is generated, or add props (trees, lollipops...) | `src/server/Terrain.server.luau` / `src/server/TerrainProps.luau` |
+| Change shop upgrades, Lucky Spin prizes, rebirth numbers, base income | `src/shared/Shop.luau` |
+| Gamepasses and the Lucky Box (paste real ids here) | `src/shared/Passes.luau` |
+| Squishy Pass season, XP, and tier rewards | `src/shared/SquishyPass.luau` |
+| Leaderboard periods, top-3 tags, end-of-week/month prizes | `src/shared/Leaderboards.luau` |
+| Save something new about a player | `SAVED_ATTRIBUTES` in `src/server/Economy.server.luau` |
+| Build a new UI screen | Use the helpers in `src/shared/UI.luau` |
 | Change the lobby booths | `src/server/Lobby.server.luau` |
-| Change player bases and showcase pedestals | `src/server/Base.server.luau` |
+| Change player bases (in the lobby) and showcase pedestals | `src/server/Base.server.luau` |
 | Change how trading works | `src/server/Trade.server.luau` |
 | Add the fart sound (or other sounds) | `src/shared/Sounds.luau` |
 | Add a chaotic event | Make a ModuleScript in `src/server/Events/` with a `Name`, `Start`, and `Stop` |
 | Change spawn rate, weather timing | Numbers at the top of `SquishyRain.server.luau` / `Weather.server.luau` |
+
+**How the game loop works:**
+- You spawn in the **lobby**, a floating island far from the hunting map with the shops, trading, leaderboards, and everyone's bases. Walk through the portal (or tap **Go Hunt**) to get to the **hunting map**, and back the same way.
+- Outer regions are **locked** behind a glowing wall. Each one needs some rebirths, then a one-time payment at a gate (set with `Unlock` in the region's file). Better regions = more luck and rarer squishies.
+- Squishies fall around you. Which ones depends on the **region** you're in (farther out = rarer, more evil). Weather (sometimes two at once!) and regions add **attributes** that stack: `Wet Shocked Donut` is worth x2 × x5 = x10.
+- **Commons are for selling.** Uncommon and up can be **equipped** for stat boosts (speed, jump, HP, luck, money). Equipped squishies and ones on your base are held, so they can't be sold or traded by accident.
+- Squishies on your **base pedestals earn money every second**.
+- **Rebirth** resets money and upgrades for a money multiplier, more pedestals, more equip slots, and a bigger bag.
+- Progress saves with DataStores. To save in Studio, turn on Game Settings → Security → **Enable Studio Access to API Services**.
+- Every server gets its own random map. The seed prints in the output and is saved as workspace's `TerrainSeed` attribute.
 
 ### Using real 3D models for squishies 🧈
 Any squishy can use a real model instead of the built-in shape:

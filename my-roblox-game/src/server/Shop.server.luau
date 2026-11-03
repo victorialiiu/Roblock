@@ -9,6 +9,9 @@ local remotes = Instance.new("Folder")
 remotes.Name = "Remotes"
 remotes.Parent = ReplicatedStorage
 
+-- Needs the Remotes folder, so it's required after making it
+local notify = require(script.Parent.Notify)
+
 local spinRemote = Instance.new("RemoteFunction")
 spinRemote.Name = "Spin"
 spinRemote.Parent = remotes
@@ -28,6 +31,10 @@ sellRemote.Parent = remotes
 local sellAllRemote = Instance.new("RemoteFunction")
 sellAllRemote.Name = "SellAll"
 sellAllRemote.Parent = remotes
+
+local equipRemote = Instance.new("RemoteFunction")
+equipRemote.Name = "Equip"
+equipRemote.Parent = remotes
 
 -- Players in the middle of a spin or roll
 local spinning = {}
@@ -80,29 +87,33 @@ buyRemote.OnServerInvoke = function(player, upgradeId)
 	return true
 end
 
--- Returns the squishy name and mutation you rolled, or nil if you can't roll right now
+-- Returns the squishy name and attribute list you rolled, or nil if you can't roll right now
 rollRemote.OnServerInvoke = function(player)
 	local leaderstats = player:FindFirstChild("leaderstats")
 	if not leaderstats or spinning[player] or leaderstats.Money.Value < Shop.ROLL_COST then
+		return nil
+	end
+	if InventoryService.isFull(player) then
+		notify(player, "🎒 Your bag is full! Sell some squishies first")
 		return nil
 	end
 	spinning[player] = true
 	leaderstats.Money.Value -= Shop.ROLL_COST
 
 	local squishy = SquishyTypes.pickRandom(Shop.getLuck(player), false)
-	local mutationName = nil
+	local mutations = {}
 	if math.random() < Shop.getMutationChance(player, false) then
-		mutationName = Weather.pickRandom().Mutation
+		table.insert(mutations, Weather.pickRandom().Mutation)
 	end
 
 	task.delay(Shop.SPIN_TIME, function()
 		spinning[player] = nil
 		if player.Parent then
-			InventoryService.add(player, squishy.Name, mutationName)
+			InventoryService.add(player, squishy.Name, mutations)
 		end
 	end)
 
-	return squishy.Name, mutationName
+	return squishy.Name, mutations
 end
 
 sellRemote.OnServerInvoke = function(player, itemName, amount)
@@ -114,4 +125,12 @@ end
 
 sellAllRemote.OnServerInvoke = function(player)
 	return InventoryService.sellAll(player)
+end
+
+-- change is 1 to equip one more, -1 to take one off
+equipRemote.OnServerInvoke = function(player, itemName, change)
+	if typeof(itemName) ~= "string" or (change ~= 1 and change ~= -1) then
+		return false
+	end
+	return InventoryService.equip(player, itemName, change)
 end

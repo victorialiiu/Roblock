@@ -440,7 +440,7 @@ end
 
 local rollable = {}
 for _, squishy in SquishyTypes.List do
-	if squishy.Value then
+	if squishy.Value and SquishyTypes.Rarities[squishy.Rarity].Weight > 0 then
 		table.insert(rollable, squishy)
 	end
 end
@@ -453,9 +453,9 @@ rollNow.Activated:Connect(function()
 	rolling = true
 	rollMessage.Text = ""
 
-	local squishyName, mutationName = remotes.Roll:InvokeServer()
+	local squishyName, mutations = remotes.Roll:InvokeServer()
 	if not squishyName then
-		rollMessage.Text = "Not enough money! Sell some squishies 💰"
+		rollMessage.Text = "Not enough money (or your bag is full)! 💰"
 		shake(rollNow)
 		rolling = false
 		return
@@ -476,12 +476,11 @@ rollNow.Activated:Connect(function()
 
 	local squishy = SquishyTypes.ByName[squishyName]
 	local rarity = SquishyTypes.Rarities[squishy.Rarity]
-	local mutation = SquishyTypes.Mutations[mutationName]
 	rollIcon.Text = squishy.Icon
-	rollName.Text = SquishyTypes.itemName(squishyName, mutationName) .. "!"
-	rollName.TextColor3 = if mutation then mutation.Color else rarity.Color
+	rollName.Text = SquishyTypes.itemName(squishyName, mutations) .. "!"
+	rollName.TextColor3 = SquishyTypes.highlightFor(squishy, mutations)
 	pop(rollReel, 1.4)
-	if rarity.Order >= 3 or mutation then
+	if rarity.Order >= 3 or #mutations > 0 then
 		confetti(gui, if rarity.Order >= 5 then 120 else 50)
 	end
 	rolling = false

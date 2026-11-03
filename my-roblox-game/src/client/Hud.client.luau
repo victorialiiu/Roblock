@@ -5,6 +5,8 @@ local TweenService = game:GetService("TweenService")
 local SquishyTypes = require(ReplicatedStorage.Shared.SquishyTypes)
 local Weather = require(ReplicatedStorage.Shared.Weather)
 local Format = require(ReplicatedStorage.Shared.Format)
+local Regions = require(ReplicatedStorage.Shared.Regions)
+local World = require(ReplicatedStorage.Shared.World)
 
 local player = Players.LocalPlayer
 local status = ReplicatedStorage:WaitForChild("Status")
@@ -91,7 +93,7 @@ TweenService:Create(
 local statusPill = Instance.new("Frame")
 statusPill.AnchorPoint = Vector2.new(0.5, 0)
 statusPill.Position = UDim2.new(0.5, 0, 0, 76)
-statusPill.Size = UDim2.new(0, 340, 0, 36)
+statusPill.Size = UDim2.new(0, 440, 0, 36)
 statusPill.BackgroundColor3 = Color3.new(0, 0, 0)
 statusPill.BackgroundTransparency = 0.4
 addCorner(statusPill)
@@ -153,11 +155,12 @@ currentEvent.Changed:Connect(function(value)
 		return
 	end
 
-	local weather = Weather.ByName[value]
-	if weather then
-		local mutation = SquishyTypes.Mutations[weather.Mutation]
-		subtitle.Text = weather.Mutation .. " squishies are falling! x" .. mutation.Multiplier .. " money"
-		subtitle.TextColor3 = mutation.Color
+	local weathers = Weather.parse(value)
+	if #weathers > 0 then
+		local mutations = Weather.mutationsOf(weathers)
+		local combo = if #weathers > 1 then "COMBO! " else ""
+		subtitle.Text = combo .. table.concat(mutations, " + ") .. " squishies are falling! Up to x" .. SquishyTypes.multiplierOf(mutations) .. " money"
+		subtitle.TextColor3 = SquishyTypes.Mutations[mutations[#mutations]].Color
 	else
 		subtitle.Text = "Watch out!"
 		subtitle.TextColor3 = WHITE
@@ -173,6 +176,66 @@ currentEvent.Changed:Connect(function(value)
 			banner.Visible = false
 		end
 	end)
+end)
+
+-- Pop-up messages from the server (bag full, auto sold, rebirth...)
+local remotes = ReplicatedStorage:WaitForChild("Remotes")
+local noticeHolder = Instance.new("Frame")
+noticeHolder.AnchorPoint = Vector2.new(0.5, 0)
+noticeHolder.Position = UDim2.new(0.5, 0, 0, 160)
+noticeHolder.Size = UDim2.fromOffset(460, 200)
+noticeHolder.BackgroundTransparency = 1
+noticeHolder.Parent = gui
+local noticeLayout = Instance.new("UIListLayout")
+noticeLayout.Padding = UDim.new(0, 6)
+noticeLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+noticeLayout.Parent = noticeHolder
+
+remotes:WaitForChild("Notify").OnClientEvent:Connect(function(text)
+	local notice = makeText(text, WHITE)
+	notice.Size = UDim2.fromOffset(460, 34)
+	notice.BackgroundTransparency = 0.15
+	notice.BackgroundColor3 = Color3.fromRGB(255, 120, 200)
+	addCorner(notice)
+	addStroke(notice, WHITE, 2)
+	local padding = Instance.new("UIPadding")
+	padding.PaddingTop = UDim.new(0, 5)
+	padding.PaddingBottom = UDim.new(0, 5)
+	padding.PaddingLeft = UDim.new(0, 12)
+	padding.PaddingRight = UDim.new(0, 12)
+	padding.Parent = notice
+	notice.Parent = noticeHolder
+	pop(notice)
+	task.delay(3.5, function()
+		notice:Destroy()
+	end)
+end)
+
+-- Which region you're in, under the weather countdown
+local regionLabel = makeText("", WHITE)
+regionLabel.AnchorPoint = Vector2.new(0.5, 0)
+regionLabel.Position = UDim2.new(0.5, 0, 0, 116)
+regionLabel.Size = UDim2.fromOffset(300, 26)
+addStroke(regionLabel, Color3.fromRGB(120, 0, 80), 2)
+regionLabel.Parent = gui
+
+task.spawn(function()
+	local lastRegion = nil
+	while true do
+		local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+		local region = root and Regions.at(root.Position)
+		if region ~= lastRegion then
+			lastRegion = region
+			local onMap = root ~= nil and World.contains(root.Position)
+			regionLabel.Text = if region
+				then region.Icon .. " " .. region.Name .. "  •  x" .. region.Luck .. " luck"
+				elseif onMap then "🌈 Spawn • head out to find squishies!"
+				else "🏠 Lobby"
+			regionLabel.TextColor3 = if region then region.Color:Lerp(WHITE, 0.4) else WHITE
+			pop(regionLabel)
+		end
+		task.wait(0.25)
+	end
 end)
 
 gui.Parent = player:WaitForChild("PlayerGui")

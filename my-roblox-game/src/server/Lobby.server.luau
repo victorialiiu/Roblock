@@ -11,6 +11,8 @@ local BOOTHS = {
 	{ Name = "Lucky Spin", Icon = "🎁", Opens = "Spin", Color = Color3.fromRGB(255, 120, 200), Angle = 135 },
 	{ Name = "Squishy Roll", Icon = "🎲", Opens = "Roll", Color = Color3.fromRGB(170, 110, 255), Angle = 225 },
 	{ Name = "Sell Squishies", Icon = "💰", Opens = "Inventory", Color = Color3.fromRGB(90, 200, 120), Angle = 315 },
+	{ Name = "Rebirth", Icon = "🌟", Opens = "Rebirth", Color = Color3.fromRGB(255, 200, 40), Angle = 0 },
+	{ Name = "Passes", Icon = "⭐", Opens = "Passes", Color = Color3.fromRGB(90, 170, 255), Angle = 180 },
 }
 
 local model = Instance.new("Model")
@@ -33,6 +35,19 @@ end
 
 -- Round pink floor with a white rim
 local flat = CFrame.Angles(0, 0, math.pi / 2)
+
+-- The floating island the whole lobby (and everyone's base) sits on, with a fluffy cloud underneath
+local island = makePart(Vector3.new(6, Lobby.ISLAND_RADIUS * 2, Lobby.ISLAND_RADIUS * 2), CFrame.new(Lobby.CENTER + Vector3.new(0, -2.7, 0)) * flat, Color3.fromRGB(170, 235, 150), Enum.PartType.Cylinder)
+island.Name = "Island"
+local rim = makePart(Vector3.new(5.6, Lobby.ISLAND_RADIUS * 2 + 4, Lobby.ISLAND_RADIUS * 2 + 4), CFrame.new(Lobby.CENTER + Vector3.new(0, -3, 0)) * flat, Color3.new(1, 1, 1), Enum.PartType.Cylinder)
+rim.Name = "IslandRim"
+for i = 1, 10 do
+	local angle = i / 10 * math.pi * 2
+	local size = 40 + (i % 3) * 15
+	local puff = makePart(Vector3.new(size, size * 0.5, size), CFrame.new(Lobby.CENTER + Vector3.new(math.sin(angle) * 90, -18 - (i % 2) * 6, math.cos(angle) * 90)), Color3.fromRGB(255, 245, 252), Enum.PartType.Ball)
+	puff.CanCollide = false
+	puff.Material = Enum.Material.SmoothPlastic
+end
 makePart(Vector3.new(0.8, Lobby.RADIUS * 2 + 4, Lobby.RADIUS * 2 + 4), CFrame.new(Lobby.CENTER + Vector3.new(0, 0.4, 0)) * flat, Color3.new(1, 1, 1), Enum.PartType.Cylinder)
 makePart(Vector3.new(1, Lobby.RADIUS * 2, Lobby.RADIUS * 2), CFrame.new(Lobby.CENTER + Vector3.new(0, 0.5, 0)) * flat, Color3.fromRGB(255, 205, 230), Enum.PartType.Cylinder)
 
@@ -111,5 +126,5 @@ subtitle.Position = UDim2.fromScale(0, 0.65)
 subtitle.Size = UDim2.fromScale(1, 0.35)
 subtitle.TextColor3 = Color3.new(1, 1, 1)
 subtitle.TextStrokeColor3 = Color3.fromRGB(120, 0, 80)
-subtitle.Text = "Catch • Sell • Roll • Trade • Show off!"
+subtitle.Text = "Catch • Equip • Sell • Trade • Rebirth!"
 subtitle.Parent = title

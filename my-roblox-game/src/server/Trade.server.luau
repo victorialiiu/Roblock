@@ -49,10 +49,10 @@ local function unready(session)
 end
 
 local function finish(session)
-	-- Make sure both players still have everything they offered
+	-- Make sure both players still have everything they offered (and didn't equip or showcase it since)
 	for _, player in { session.A, session.B } do
 		for itemName, amount in session.Offers[player] do
-			if InventoryService.count(player, itemName) < amount then
+			if InventoryService.free(player, itemName) < amount then
 				close(session, player.DisplayName .. " doesn't have those squishies anymore")
 				return
 			end
@@ -63,15 +63,15 @@ local function finish(session)
 	for _, player in { session.A, session.B } do
 		moving[player] = {}
 		for itemName, amount in session.Offers[player] do
-			local squishy, mutationName = InventoryService.describe(player, itemName)
+			local squishy, mutations = InventoryService.describe(player, itemName)
 			InventoryService.remove(player, itemName, amount)
-			table.insert(moving[player], { Squishy = squishy.Name, Mutation = mutationName, Amount = amount })
+			table.insert(moving[player], { Squishy = squishy.Name, Mutations = mutations, Amount = amount })
 		end
 	end
 	for _, player in { session.A, session.B } do
 		local partner = partnerOf(session, player)
 		for _, item in moving[player] do
-			InventoryService.add(partner, item.Squishy, item.Mutation, item.Amount)
+			InventoryService.add(partner, item.Squishy, item.Mutations, item.Amount)
 		end
 	end
 
@@ -113,13 +113,13 @@ function handlers.respond(player, from, accept)
 	sendState(session)
 end
 
--- Sets how many of one squishy you're offering (0 takes it out)
+-- Sets how many of one squishy you're offering (0 takes it out). Equipped and showcased ones can't be offered
 function handlers.offer(player, itemName, amount)
 	local session = trades[player]
 	if not session or typeof(itemName) ~= "string" or typeof(amount) ~= "number" then
 		return
 	end
-	amount = math.clamp(math.floor(amount), 0, InventoryService.count(player, itemName))
+	amount = math.clamp(math.floor(amount), 0, math.max(InventoryService.free(player, itemName), 0))
 	session.Offers[player][itemName] = if amount > 0 then amount else nil
 	unready(session)
 	sendState(session)

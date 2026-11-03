@@ -4,6 +4,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local SquishyTypes = require(ReplicatedStorage.Shared.SquishyTypes)
+local Shop = require(ReplicatedStorage.Shared.Shop)
+local Format = require(ReplicatedStorage.Shared.Format)
 
 local player = Players.LocalPlayer
 local inventory = player:WaitForChild("Inventory")
@@ -68,14 +70,20 @@ homeButton.Activated:Connect(function()
 	remotes.GoToBase:FireServer()
 end)
 
--- Only show the "Show off a squishy" prompts on your own base
+-- Only show the "Show off a squishy" prompts on your own base, on pedestals you've unlocked
 local function updatePrompts(base)
 	local mine = base:GetAttribute("Owner") == player.UserId
 	for _, prompt in base:GetDescendants() do
 		if prompt:IsA("ProximityPrompt") then
-			prompt.Enabled = mine
+			prompt.Enabled = mine and not prompt:GetAttribute("Locked")
 		end
 	end
+end
+
+local function watchPrompt(base, prompt)
+	prompt:GetAttributeChangedSignal("Locked"):Connect(function()
+		updatePrompts(base)
+	end)
 end
 
 local function watchBase(base)
@@ -83,8 +91,14 @@ local function watchBase(base)
 	base:GetAttributeChangedSignal("Owner"):Connect(function()
 		updatePrompts(base)
 	end)
+	for _, child in base:GetDescendants() do
+		if child:IsA("ProximityPrompt") then
+			watchPrompt(base, child)
+		end
+	end
 	base.DescendantAdded:Connect(function(child)
 		if child:IsA("ProximityPrompt") then
+			watchPrompt(base, child)
 			updatePrompts(base)
 		end
 	end)
@@ -161,13 +175,15 @@ local function openPicker(slot)
 		choose(slot, nil)
 	end)
 
+	-- Only squishies that aren't equipped or already on a pedestal
 	for _, count in inventory:GetChildren() do
-		local squishy, mutationName = SquishyTypes.parseItem(count.Name)
-		if squishy then
-			local mutation = SquishyTypes.Mutations[mutationName]
-			local color = if mutation then mutation.Color else SquishyTypes.Rarities[squishy.Rarity].Color
-			local value = SquishyTypes.valueOf(squishy, mutationName)
-			local button = makeButton(squishy.Icon .. " " .. count.Name .. "  (x" .. count.Value .. ")", color)
+		local squishy, mutations = SquishyTypes.describe(count)
+		local free = SquishyTypes.freeCount(count)
+		if squishy and free > 0 then
+			local color = SquishyTypes.highlightFor(squishy, mutations)
+			local value = SquishyTypes.valueOf(squishy, mutations)
+			local income = Format.money(value * Shop.INCOME_RATE * Shop.moneyMultiplier(player))
+			local button = makeButton(squishy.Icon .. " " .. count.Name .. "  (x" .. free .. ")  " .. income .. "/s", color)
 			button.Size = UDim2.new(1, -8, 0, 40)
 			button.LayoutOrder = -value
 			button.Parent = list

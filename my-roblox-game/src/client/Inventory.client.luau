@@ -16,7 +16,6 @@ local remotes = ReplicatedStorage:WaitForChild("Remotes")
 
 local CREAM = Color3.fromRGB(255, 248, 240)
 local PINK = Color3.fromRGB(255, 120, 200)
-local SOFT_PINK = Color3.fromRGB(255, 190, 225)
 local LAVENDER = Color3.fromRGB(180, 150, 255)
 local DARK = Color3.fromRGB(80, 50, 70)
 local GREEN = Color3.fromRGB(60, 170, 90)
@@ -151,7 +150,8 @@ closeButton.Position = UDim2.new(1, -12, 0, 12)
 closeButton.Size = UDim2.fromOffset(40, 40)
 closeButton.Parent = panel
 
--- Selling everything takes two taps so nobody sells their Boba Tea by accident
+-- Selling everything takes two taps so nobody sells their Boba Tea by accident.
+-- Equipped and showcased squishies are never sold
 local sellAllButton = makeButton("Sell All", GREEN)
 sellAllButton.AnchorPoint = Vector2.new(1, 0)
 sellAllButton.Position = UDim2.new(1, -62, 0, 16)
@@ -191,7 +191,7 @@ grid.AutomaticCanvasSize = Enum.AutomaticSize.Y
 grid.Parent = panel
 
 local layout = Instance.new("UIGridLayout")
-layout.CellSize = UDim2.fromOffset(130, 200)
+layout.CellSize = UDim2.fromOffset(130, 236)
 layout.CellPadding = UDim2.fromOffset(10, 10)
 layout.SortOrder = Enum.SortOrder.LayoutOrder
 layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -205,16 +205,20 @@ emptyLabel.Parent = panel
 
 local function refresh()
 	local caught = 0
+	local equipped = 0
 	local worth = 0
 	for _, count in inventory:GetChildren() do
-		local squishy = SquishyTypes.ByName[count:GetAttribute("Squishy")]
+		local squishy, mutations = SquishyTypes.describe(count)
 		caught += count.Value
+		equipped += count:GetAttribute("Equipped") or 0
 		if squishy then
-			worth += SquishyTypes.valueOf(squishy, count:GetAttribute("Mutation")) * count.Value
+			worth += SquishyTypes.valueOf(squishy, mutations) * count.Value
 		end
 	end
 	emptyLabel.Visible = caught == 0
-	summary.Text = caught .. " squishies • worth " .. Format.money(worth * Shop.moneyMultiplier(player))
+	local full = if caught >= Shop.bagSize(player) then " (FULL!)" else ""
+	summary.Text = "🎒 " .. caught .. "/" .. Shop.bagSize(player) .. full .. " • worth " .. Format.money(worth * Shop.moneyMultiplier(player))
+	summary.TextColor3 = if full ~= "" then Color3.fromRGB(230, 60, 80) else DARK
 
 	local boosts = {}
 	for name, amount in SquishyTypes.getPassives(inventory) do
@@ -222,7 +226,8 @@ local function refresh()
 			table.insert(boosts, SquishyTypes.formatBoost(name, amount))
 		end
 	end
-	boostsLabel.Text = if #boosts > 0 then "Boosts: " .. table.concat(boosts, "   ") else "Boosts: none yet"
+	local slots = "Equipped " .. equipped .. "/" .. Shop.equipSlots(player) .. ": "
+	boostsLabel.Text = slots .. (if #boosts > 0 then table.concat(boosts, "   ") else "equip squishies for boosts!")
 end
 
 -- Cute bubble that bounces in when you catch one: "🧈 +1 Golden Butter ✨"
@@ -284,17 +289,15 @@ local function toast(squishy, itemName, color, big)
 end
 
 local function addCard(count, isNew)
-	local squishy = SquishyTypes.ByName[count:GetAttribute("Squishy")]
+	local squishy, mutations = SquishyTypes.describe(count)
 	if not squishy then
 		return
 	end
-	local mutationName = count:GetAttribute("Mutation")
-	local mutation = SquishyTypes.Mutations[mutationName]
 	local rarity = SquishyTypes.Rarities[squishy.Rarity]
-	local highlight = if mutation then mutation.Color else rarity.Color
-	local value = SquishyTypes.valueOf(squishy, mutationName)
-	local big = rarity.Order >= 3 or mutation ~= nil
-	local celebrate = rarity.Order >= 4 or (mutation ~= nil and mutation.Multiplier >= 10)
+	local highlight = SquishyTypes.highlightFor(squishy, mutations)
+	local value = SquishyTypes.valueOf(squishy, mutations)
+	local big = rarity.Order >= 3 or #mutations > 0
+	local celebrate = rarity.Order >= 4 or SquishyTypes.multiplierOf(mutations) >= 10
 
 	local card = Instance.new("Frame")
 	card.BackgroundColor3 = WHITE
@@ -306,10 +309,10 @@ local function addCard(count, isNew)
 	icon.AnchorPoint = Vector2.new(0.5, 0)
 	icon.Position = UDim2.new(0.5, 0, 0, 10)
 	icon.Size = UDim2.fromOffset(64, 64)
-	icon.BackgroundColor3 = SquishyTypes.colorFor(squishy, mutationName)
+	icon.BackgroundColor3 = SquishyTypes.colorFor(squishy, mutations)
 	addCorner(icon)
 	addStroke(icon, WHITE, 2)
-	if mutation and mutation.Rainbow then
+	if SquishyTypes.hasRainbow(mutations) then
 		icon.BackgroundColor3 = WHITE
 		local gradient = Instance.new("UIGradient")
 		gradient.Color = RAINBOW
@@ -337,8 +340,8 @@ local function addCard(count, isNew)
 	tagLayout.Padding = UDim.new(0, 4)
 	tagLayout.Parent = tags
 	makePill(tags, squishy.Rarity, rarity.Color)
-	if mutation then
-		makePill(tags, mutationName .. " x" .. mutation.Multiplier, mutation.Color)
+	if #mutations > 0 then
+		makePill(tags, SquishyTypes.formatMutations(mutations), highlight)
 	end
 	tags.Parent = card
 
@@ -347,23 +350,74 @@ local function addCard(count, isNew)
 	worthLabel.Size = UDim2.new(1, -12, 0, 18)
 	worthLabel.Parent = card
 
-	local passiveLabel = makeText(SquishyTypes.formatBoost(squishy.Passive, squishy.Boost) .. " each", LAVENDER)
+	-- Commons are just for selling. Everything else can be equipped for a stat boost
+	local passiveText = if squishy.Passive
+		then SquishyTypes.formatBoost(squishy.Passive, SquishyTypes.boostOf(squishy, mutations)) .. " equipped"
+		else "Sell only"
+	local passiveLabel = makeText(passiveText, if squishy.Passive then LAVENDER else GRAY)
 	passiveLabel.Position = UDim2.new(0, 6, 0, 141)
 	passiveLabel.Size = UDim2.new(1, -12, 0, 18)
 	passiveLabel.Parent = card
 
-	local sellButton = makeButton("Sell 1", GREEN)
-	sellButton.Position = UDim2.new(0, 8, 0, 164)
-	sellButton.Size = UDim2.new(1, -16, 0, 28)
-	local sellPadding = Instance.new("UIPadding")
-	sellPadding.PaddingTop = UDim.new(0, 5)
-	sellPadding.PaddingBottom = UDim.new(0, 5)
-	sellPadding.Parent = sellButton
-	sellButton.Parent = card
+	local heldLabel = makeText("", GRAY)
+	heldLabel.Position = UDim2.new(0, 6, 0, 160)
+	heldLabel.Size = UDim2.new(1, -12, 0, 14)
+	heldLabel.Parent = card
+
+	local function smallButton(text, color, top)
+		local button = makeButton(text, color)
+		button.Position = UDim2.new(0, 8, 0, top)
+		button.Size = UDim2.new(1, -16, 0, 26)
+		local padding = Instance.new("UIPadding")
+		padding.PaddingTop = UDim.new(0, 5)
+		padding.PaddingBottom = UDim.new(0, 5)
+		padding.Parent = button
+		button.Parent = card
+		return button
+	end
+
+	local sellButton = smallButton("Sell 1", GREEN, 178)
 	sellButton.Activated:Connect(function()
-		if remotes.Sell:InvokeServer(count.Name, 1) <= 0 then
-			sellButton.BackgroundColor3 = GRAY
+		remotes.Sell:InvokeServer(count.Name, 1)
+	end)
+
+	local equipButton, unequipButton
+	if squishy.Passive then
+		equipButton = smallButton("Equip", LAVENDER, 206)
+		equipButton.Size = UDim2.new(0.5, -10, 0, 26)
+		equipButton.Activated:Connect(function()
+			remotes.Equip:InvokeServer(count.Name, 1)
+		end)
+		unequipButton = smallButton("Unequip", GRAY, 206)
+		unequipButton.Position = UDim2.new(0.5, 2, 0, 206)
+		unequipButton.Size = UDim2.new(0.5, -10, 0, 26)
+		unequipButton.Activated:Connect(function()
+			remotes.Equip:InvokeServer(count.Name, -1)
+		end)
+	end
+
+	-- Equipped and showcased ones are held, so the sell button only sells the rest
+	local function updateHeld()
+		local equipped = count:GetAttribute("Equipped") or 0
+		local showcased = count:GetAttribute("Showcased") or 0
+		local held = {}
+		if equipped > 0 then
+			table.insert(held, "⚡" .. equipped .. " equipped")
 		end
+		if showcased > 0 then
+			table.insert(held, "🏠" .. showcased .. " on base")
+		end
+		heldLabel.Text = table.concat(held, "  ")
+		sellButton.BackgroundColor3 = if SquishyTypes.freeCount(count) > 0 then GREEN else GRAY
+		card.BackgroundColor3 = if equipped > 0 then Color3.fromRGB(245, 240, 255) else WHITE
+		if equipButton then
+			equipButton.BackgroundColor3 = if SquishyTypes.freeCount(count) > 0 then LAVENDER else GRAY
+			unequipButton.BackgroundColor3 = if equipped > 0 then Color3.fromRGB(240, 120, 150) else GRAY
+		end
+	end
+	count.AttributeChanged:Connect(function()
+		updateHeld()
+		refresh()
 	end)
 
 	local countPill = makeText("", WHITE)
@@ -385,12 +439,14 @@ local function addCard(count, isNew)
 
 	local last = count.Value
 	countPill.Text = "x" .. last
+	updateHeld()
 	count.Changed:Connect(function(newCount)
 		if newCount > last then
 			caught()
 		end
 		last = newCount
 		countPill.Text = "x" .. newCount
+		updateHeld()
 		refresh()
 	end)
 

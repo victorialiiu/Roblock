@@ -293,21 +293,20 @@ local state = nil
 local function worthOf(offer)
 	local total = 0
 	for itemName, amount in offer do
-		local squishy, mutationName = SquishyTypes.parseItem(itemName)
+		local squishy, mutations = SquishyTypes.parseItem(itemName)
 		if squishy then
-			total += SquishyTypes.valueOf(squishy, mutationName) * amount
+			total += SquishyTypes.valueOf(squishy, mutations) * amount
 		end
 	end
 	return total
 end
 
 local function addChip(grid, itemName, amount, onClick)
-	local squishy, mutationName = SquishyTypes.parseItem(itemName)
+	local squishy, mutations = SquishyTypes.parseItem(itemName)
 	if not squishy then
 		return
 	end
-	local mutation = SquishyTypes.Mutations[mutationName]
-	local color = if mutation then mutation.Color else SquishyTypes.Rarities[squishy.Rarity].Color
+	local color = SquishyTypes.highlightFor(squishy, mutations)
 
 	local chip = makeButton(squishy.Icon .. " " .. itemName .. " x" .. amount, color)
 	chip.AutoButtonColor = onClick ~= nil
@@ -342,8 +341,9 @@ local function render()
 		addChip(theirGrid, itemName, amount, nil)
 	end
 	clear(inventoryGrid)
+	-- Equipped and showcased squishies can't be traded
 	for _, count in inventory:GetChildren() do
-		local left = count.Value - (state.Mine[count.Name] or 0)
+		local left = SquishyTypes.freeCount(count) - (state.Mine[count.Name] or 0)
 		if left > 0 then
 			addChip(inventoryGrid, count.Name, left, function()
 				tradeRemote:FireServer("offer", count.Name, (state.Mine[count.Name] or 0) + 1)

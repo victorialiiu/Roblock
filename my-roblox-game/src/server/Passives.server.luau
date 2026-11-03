@@ -30,11 +30,6 @@ local function apply(player)
 	local healthPercent = humanoid.Health / humanoid.MaxHealth
 	humanoid.MaxHealth = BASE_HEALTH + boosts.Strength
 	humanoid.Health = humanoid.MaxHealth * healthPercent
-
-	local scale = 1 + boosts.Size
-	if math.abs(character:GetScale() - scale) > 0.001 then
-		character:ScaleTo(scale)
-	end
 end
 
 local function setup(player)
@@ -44,8 +39,9 @@ local function setup(player)
 	end)
 
 	local inventory = player:WaitForChild("Inventory")
+	-- Stats only come from equipped squishies, so re-apply when one is equipped or taken off
 	local function watch(count)
-		count.Changed:Connect(function()
+		count.AttributeChanged:Connect(function()
 			apply(player)
 		end)
 		apply(player)

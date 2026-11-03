@@ -1,7 +1,12 @@
--- Every kind of weather. Each one gives falling squishies a mutation
+-- Every kind of weather. Each one gives falling squishies an attribute.
+-- Sometimes two happen at once, and squishies can get both attributes!
 local Weather = {}
 
 Weather.MUTATION_CHANCE = 0.5
+-- Chance the weather is a combo of two
+Weather.COMBO_CHANCE = 0.25
+-- CurrentEvent holds one weather name, or two joined like "Rain + Thunderstorm"
+Weather.SEPARATOR = " + "
 
 Weather.List = {
 	{
@@ -53,19 +58,60 @@ for _, weather in Weather.List do
 	Weather.ByName[weather.Name] = weather
 end
 
-function Weather.pickRandom()
+function Weather.pickRandom(except)
 	local total = 0
 	for _, weather in Weather.List do
-		total += weather.Weight
+		if weather ~= except then
+			total += weather.Weight
+		end
 	end
 	local roll = math.random() * total
 	for _, weather in Weather.List do
-		roll -= weather.Weight
-		if roll <= 0 then
-			return weather
+		if weather ~= except then
+			roll -= weather.Weight
+			if roll <= 0 then
+				return weather
+			end
 		end
 	end
 	return Weather.List[1]
+end
+
+-- One weather, or sometimes two different ones
+function Weather.pickCombo()
+	local first = Weather.pickRandom()
+	if math.random() < Weather.COMBO_CHANCE then
+		return { first, Weather.pickRandom(first) }
+	end
+	return { first }
+end
+
+-- The weathers in a CurrentEvent value. Empty if it's calm or a non-weather event
+function Weather.parse(value)
+	local list = {}
+	for _, name in string.split(value or "", Weather.SEPARATOR) do
+		local weather = Weather.ByName[name]
+		if weather then
+			table.insert(list, weather)
+		end
+	end
+	return list
+end
+
+function Weather.nameOf(list)
+	local names = {}
+	for _, weather in list do
+		table.insert(names, weather.Name)
+	end
+	return table.concat(names, Weather.SEPARATOR)
+end
+
+function Weather.mutationsOf(list)
+	local mutations = {}
+	for _, weather in list do
+		table.insert(mutations, weather.Mutation)
+	end
+	return mutations
 end
 
 return Weather

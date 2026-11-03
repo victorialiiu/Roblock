@@ -51,11 +51,15 @@ while true do
 		countdown(WEATHER_TIME, event.Name .. "!")
 		event.Stop()
 	else
-		local weather = Weather.pickRandom()
-		local mutation = SquishyTypes.Mutations[weather.Mutation]
-		currentEvent.Value = weather.Name
-		tweenLighting(weather.Lighting)
-		countdown(WEATHER_TIME, weather.Name .. "! " .. weather.Mutation .. " x" .. mutation.Multiplier)
+		-- Sometimes two weathers happen at once. The rarer one sets the sky
+		local weathers = Weather.pickCombo()
+		table.sort(weathers, function(a, b)
+			return a.Weight < b.Weight
+		end)
+		currentEvent.Value = Weather.nameOf(weathers)
+		tweenLighting(weathers[1].Lighting)
+		local label = SquishyTypes.formatMutations(Weather.mutationsOf(weathers))
+		countdown(WEATHER_TIME, currentEvent.Value .. "! " .. label)
 		tweenLighting(defaultLighting)
 	end
 

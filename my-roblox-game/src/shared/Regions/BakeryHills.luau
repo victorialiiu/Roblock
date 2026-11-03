@@ -1,0 +1,22 @@
+return {
+	Name = "Bakery Hills",
+	Icon = "🥐",
+	Color = Color3.fromRGB(235, 200, 140),
+	Order = 2,
+	Width = 120,
+	Luck = 1.5,
+	Unlock = { Rebirths = 0, Cost = 5000 },
+	EvilChance = 0.12,
+	Mutation = "Toasted",
+	Squishies = { "Toast", "Egg", "Cheese", "Dumpling", "Donut", "Cupcake", "Moldy Toast", "Angry Chili" },
+	Terrain = {
+		Material = Enum.Material.Sand,
+		HighMaterial = Enum.Material.Sandstone,
+		Colors = { [Enum.Material.Sand] = Color3.fromRGB(255, 215, 150), [Enum.Material.Sandstone] = Color3.fromRGB(235, 160, 100) },
+		Height = 22,
+		Step = 4,
+		Scale = 90,
+		Patches = { Material = Enum.Material.Mud, Color = Color3.fromRGB(150, 90, 60), Amount = 0.2 },
+		Props = { Bread = 0.02, Rock = 0.02, Bush = 0.015, Mushroom = 0.01 },
+	},
+}

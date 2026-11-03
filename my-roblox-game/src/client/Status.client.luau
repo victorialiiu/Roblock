@@ -27,7 +27,7 @@ local STATS = {
 	{ Id = "Speed", Name = "Speed", Icon = "👟", Color = Color3.fromRGB(150, 230, 200) },
 	{ Id = "Jump", Name = "Jump", Icon = "🦘", Color = Color3.fromRGB(170, 215, 255) },
 	{ Id = "Health", Name = "Health", Icon = "💖", Color = Color3.fromRGB(255, 185, 210) },
-	{ Id = "Size", Name = "Size", Icon = "📏", Color = Color3.fromRGB(255, 215, 175) },
+	{ Id = "Money", Name = "Money", Icon = "💰", Color = Color3.fromRGB(255, 215, 175) },
 	{ Id = "Luck", Name = "Luck", Icon = "🍀", Color = Color3.fromRGB(185, 240, 170) },
 	{ Id = "Mutate", Name = "Mutate", Icon = "✨", Color = Color3.fromRGB(215, 190, 255) },
 }
@@ -269,8 +269,8 @@ local function update()
 		statLabels.Speed.Text = tostring(round(humanoid.WalkSpeed, 1))
 		statLabels.Jump.Text = tostring(round(humanoid.JumpHeight, 1))
 		statLabels.Health.Text = math.ceil(humanoid.Health) .. "/" .. math.ceil(humanoid.MaxHealth)
-		statLabels.Size.Text = round(character:GetScale() * 100) .. "%"
 	end
+	statLabels.Money.Text = "x" .. round(Shop.moneyMultiplier(player), 2)
 	statLabels.Luck.Text = "x" .. round(Shop.getLuck(player), 2)
 	statLabels.Mutate.Text = round(Shop.getMutationChance(player, true) * 100) .. "%"
 end
